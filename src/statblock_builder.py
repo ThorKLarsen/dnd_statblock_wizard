@@ -20,22 +20,50 @@ class Statblock_builder():
 
         OCR, DCR = self.get_offensive_defensive_CR(CR, offense_ratio)
 
+
     def get_offensive_defensive_CR(self, CR, offense_ratio)
         if offense_ratio is None:
             offense_ratio = random.random/2 + 0.5
         return (CR * (1 + offense_ratio), CR * (1-offense_ratio))
 
-    
     def PB_from_CR(self, CR):
         if CR < 5:
             return 2
         else:
             return (CR+7)//4
+        
     def CR_from_PB(self, PB):
         return PB * 4 - 6
+    
     def HP_from_CR(self, CR):
+        return 10 + 15*CR
+    
+    def AC_from_CR(self, CR):
+        if CR < 0.5:
+            return 12
+        elif CR <= 1:
+            return 13
+        else:
+            return 13 + 0.35*CR
 
+    def defensive_CR(self, HP, AC, VRI_score):
+        """Computes CR based on only the defensiv stats of the monster.
+        The exact values are based on a reggression analysis of official
+        DnD 5 monsters.
 
+        Args:
+            HP (Float): HP of the monster
+            AC (Float): AC of the monster
+            VRI_score (Float): A score based on the amount of vulnerabilites
+                            resistances and immunities the monster has. Each
+                            point equals 1% more expected damage taken.
+
+        Returns:
+            CR (Float): Defensive CR of the monster
+        """
+        b = -3.65
+        a = [0.05376286 0.30206772]
+        CR = b + HP * a[0] * (1 + VRI_score/100) + AC * a[1]
 
 class Statblock():
     num_attributes = (
