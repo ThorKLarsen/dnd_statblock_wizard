@@ -64,6 +64,10 @@ class Statblock_builder():
         b = -3.65
         a = [0.05376286 0.30206772]
         CR = b + HP * a[0] * (1 + VRI_score/100) + AC * a[1]
+        return CR
+    
+    def offensive_CR(self, tohit, ):
+        pass
 
 class Statblock():
     num_attributes = (
