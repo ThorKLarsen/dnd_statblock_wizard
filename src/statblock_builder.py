@@ -2,10 +2,15 @@ import random
 import math
 
 class Statblock_builder():
+    """Class to build Statblock instances
+
+    """    
+    core_stat_names = ['CR', 'Hp', 'AC', 'tohit', 'damage', 'strong_DC']
+
     def __init__(self, seed = None):
         pass
 
-    def make_statblock(self, CR, offense_ratio=None, seed=None, **kwargs) -> Statblock:
+    def make_statblock(self, CR, offense_ratio=None, seed=None, stats=dict()):
         """Makes a Statblock object based losely on the DMG p.274 table. 
 
 
@@ -18,11 +23,13 @@ class Statblock_builder():
             Statblock: A Statblock object of the created monster.
         """ 
         random.seed(seed)
-        stats = kwargs
+
+        for stat_name in Statblock_builder.core_stat_names:
+            stats.setdefault(stat_name, None)
 
         OCR, DCR = self.get_offensive_defensive_CR(CR, offense_ratio)
-        HP, AC = self.get_defensive_stats(DCR)
-        tohit, damage, DC = self.get_offensive_stats(OCR)
+        HP, AC = self.get_defensive_stats(DCR, HP=stats['HP'], AC=stats['AC'])
+        tohit, damage, DC = self.get_offensive_stats(OCR, tohit=stats['tohit'], damage=stats['damage'], strong_DC=stats['strong_DC'])
 
         stats['HP'] = HP
         stats['AC'] = AC
@@ -30,9 +37,20 @@ class Statblock_builder():
         stats['damage'] = damage
         stats['DC'] = DC
 
+        statblock = Statblock(kwargs=stats)
 
+        return statblock
 
-    def get_offensive_defensive_CR(self, CR, offense_ratio):
+    def get_offensive_defensive_CR(self, CR, offense_ratio=None):
+        """Splits CR in offensiveCR and defensiveCR based on some ratio
+
+        Args:
+            CR (float): challenge rating of the monster
+            offense_ratio (float): number between 0 and 1.
+
+        Returns:
+            (OCR, DCF): Tuple of offensiveCR and defensiveCR
+        """
         if offense_ratio is None:
             offense_ratio = random.random/2 + 0.5
         return (CR * (1 + offense_ratio), CR * (1-offense_ratio))
@@ -171,7 +189,7 @@ class Statblock_builder():
 
         return CR_avg
 
-    def get_offensive_stats(self, CR, DC_ratio=0.25) -> tuple[float, float, float]:
+    def get_offensive_stats(self, CR, tohit=None, damage=None, strong_DC=None, DC_ratio=0.25) -> tuple[float, float, float]:
         """Computes the offensive stats of a monster based on CR
 
         Args:
@@ -181,17 +199,30 @@ class Statblock_builder():
         Returns:
             (tohit, damage, strongDC): Tuple of offensive stats
         """
-        a = random.random()
-        b = 1-a
-        tohit_ratio = 1 + (0.5-a)*0.8
-        damage_ratio = 1 + (0.5-b)*0.8
+        if tohit is None and damage is None:
+            a = random.random()
+            b = 1-a
+            tohit_ratio = 1 + (0.5-a)*0.8
+            damage_ratio = 1 + (0.5-b)*0.8
 
-        res = (
-            self.tohit_from_CR(CR * tohit_ratio),
-            self.damage_from_CR(CR * damage_ratio),
-            self.strong_DC_from_CR(CR * tohit_ratio * DC_ratio),
-        )
-        return res
+            tohit = self.tohit_from_CR(CR * tohit_ratio)
+            damage = self.damage_from_CR(CR * damage_ratio)
+            strong_DC = self.strong_DC_from_CR(CR * tohit_ratio * DC_ratio)
+        elif tohit is None:
+            CR_tohit = self.CR_from_tohit(tohit)
+            CR_damage = 2*CR - CR_tohit
+
+            damage = self.damage_from_CR(CR_damage)
+        elif damage is None:
+            CR_damage = self.CR_from_damage(CR_damage)
+            CR_tohit = 2*CR - CR_damage
+
+            tohit = self.tohit_from_CR(CR_tohit)
+
+        if strong_DC is None:
+            strong_DC = self.strong_DC_from_CR(CR * tohit_ratio * DC_ratio)
+
+        return tohit, damage, strong_DC
 
     def tohit_from_CR(self, CR):
         if CR >= 1:
@@ -251,7 +282,7 @@ class Statblock():
         'Persuasion',
     )
 
-    def __init__(self, **kwargs):
+    def __init__(self, stats):
         self.attributes = {}
         self.proficiencies = []
         self.actions = []
@@ -261,7 +292,7 @@ class Statblock():
 
 
         # Unpack kewword arguments
-        for k, v in kwargs:
+        for k, v in stats:
             if k in Statblock.num_attributes:
                 self.attributes[k] = v
             elif k == 'actions':
@@ -276,11 +307,11 @@ class Statblock():
                 self.senses = v
 
 
-    def __index__(self, name):
+    def __getitem__(self, key):
         try:
-            return self.attributes[name]
+            return self.attributes[key]
         except:
-            raise AttributeError(self + ' does not have attribute ' + name)
+            raise AttributeError(self + ' does not have attribute ' + key)
 
     def is_proficient(self, skill):
         return skill in self.proficiencies
