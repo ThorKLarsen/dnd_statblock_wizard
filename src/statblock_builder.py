@@ -82,37 +82,67 @@ class Statblock_builder():
             CR (Float): Defensive CR of the monster
         """
         b = -3.65
-        a = [0.05376286 0.30206772]
+        a = [0.05376286, 0.30206772]
         CR = b + HP * a[0] * (1 + VRI_score/100) + AC * a[1]
         return CR
 
-    def get_defensive_stats(self, CR, HP=None, AC=None):
-        if AC is None and HP is None:
-            a = random.random()
-            b = 1-a
-            HP_ratio = 1 + (0.5-a)*0.8
-            AC_ratio = 1 + (0.5-b)*0.8
+    def get_defensive_stats(self, CR, HP=None, AC=None, HP_to_AC_ratio=0.5, random_interval=0):
+        """Computes defensive stats of the monster based in CR.
 
-            res = (
-                self.HP_from_CR(CR * HP_ratio),
-                self.AC_from_CR(CR * AC_ratio),
-            )
+        Args:
+            CR (float): CR  of the monster
+            HP (float, optional): HP of the monster. Defaults to None.
+            AC (float, optional): AC of the monster. Defaults to None.
+            HP_to_AC_ratio (float, optional): Base ratio of the CR-budget that 
+                                            will be used on HP as opposed to AC. 
+                                            This is only used if no HP or AC are 
+                                            given Defaults to 0.5.
+            random_interval (float, optional): Determines how far the CR-budget is 
+                                            allowed to randomly deviate. At one the 
+                                            whole budget can randomly be used on 
+                                            either AC or HP. At zero, there is
+                                            no random deviating. Defaults to 0.
+
+        Returns:
+            (HP, AC): HP and AC that correspands to the given CR. If either or both 
+            were given as arguments, they are passed back here.
+        """
+        if AC is None and HP is None:
+            if random_interval:
+                a = (random.random() - 0.5)*random_interval
+                b = random_interval - a
+            else:
+                a, b = 0, 0
+            HP_modifier = 2 * HP_to_AC_ratio     + a
+            AC_modifier = 2 * (1-HP_to_AC_ratio) + b
+
+            HP = self.HP_from_CR(CR * HP_modifier)
+            AC = self.AC_from_CR(CR * AC_modifier)
         elif AC is None:
-            CR_AC = self.CR
-        return res
+            CR_AC = self.CR_from_AC(AC)
+            CR_HP = 2*CR - CR_AC
+
+            HP = self.HP_from_CR(CR_HP)
+        elif HP is None:
+            CR_HP = self.CR_from_HP(HP)
+            CR_AC = 2*CR - CR_HP
+
+            AC = self.AC_from_CR(AC)
+        
+        return (HP, AC)
 
     def CR_from_tohit(self, tohit):
         if tohit >= 5:
             CR = (tohit-1)/2
         else:
-            CR = 0.00335 * math.e**(1.33*x)
+            CR = 0.00335 * math.e**(1.33*tohit)
         return CR
 
     def CR_from_damage(self, damage):
         if damage >= 10:
             CR = (damage-1)/5
         else:
-            CR = 0.043 * math.e**(0.32*x)
+            CR = 0.043 * math.e**(0.32*damage)
         return CR
 
     def CR_from_strong_DC(self, strong_DC):
@@ -170,7 +200,7 @@ class Statblock_builder():
             return 0.75 * math.log(300*CR)
     
     def damage_from_CR(self, CR):
-        if >= 1:
+        if CR >= 1:
             return (CR+1)*5
         else:
             return 3.125 * math.log(23.3 * CR)
