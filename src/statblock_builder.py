@@ -1,7 +1,10 @@
 import random
 import math
+import enum
 
-class Statblock_builder():
+from damage_types import *
+
+class StatblockBuilder():
     """Class to build Statblock instances
 
     """    
@@ -10,7 +13,7 @@ class Statblock_builder():
     def __init__(self, seed = None):
         pass
 
-    def make_statblock(self, CR, offense_ratio=None, seed=None, stats=dict()):
+    def make_statblock_basic(self, CR, stats=dict(), offense_ratio=None, seed=None):
         """Makes a Statblock object based losely on the DMG p.274 table. 
 
 
@@ -24,7 +27,7 @@ class Statblock_builder():
         """ 
         random.seed(seed)
 
-        for stat_name in Statblock_builder.core_stat_names:
+        for stat_name in StatblockBuilder.core_stat_names:
             stats.setdefault(stat_name, None)
 
         OCR, DCR = self.get_offensive_defensive_CR(CR, offense_ratio)
@@ -37,9 +40,34 @@ class Statblock_builder():
         stats['damage'] = damage
         stats['DC'] = DC
 
-        statblock = Statblock(kwargs=stats)
+        damage_type = DamageType.BLUDGEONING
+        attack = self.make_attack('Slam', damage_type, tohit, damage)
+        stats['actions'] = [attack]
+        stats['basic_attack'] = attack
+
+        statblock = Statblock(stats=stats)
 
         return statblock
+
+    def make_attack(self, name, damage_type, tohit, damage_target, die_size = None, n_attacks=None):
+        if die_size is None:
+            die_size = random.choice((4,6,8,12))
+            if damage_target > 50 and die_size == 4:
+                die_size = 8
+        
+        assert die_size in [1,2,4,6,8,12,20]
+        die_avg_damage = die_size//2 + 0.5
+        if n_attacks is None:
+            n_dice = damage_target//die_avg_damage
+            if n_dice > 8:
+                n_attacks = math.ceil(n_dice/8)
+                n_dice = (damage_target/n_attacks)//die_avg_damage
+            else:
+                n_attacks = 1
+        else:
+            n_dice = (damage_target/n_attacks)//die_avg_damage
+        modifier = round(damage_target/n_attacks - n_dice*die_avg_damage)
+        return Attack(name, tohit, n_dice, die_size, modifier, damage_type, n_attacks)
 
     def get_offensive_defensive_CR(self, CR, offense_ratio=None):
         """Splits CR in offensiveCR and defensiveCR based on some ratio
@@ -52,7 +80,7 @@ class Statblock_builder():
             (OCR, DCF): Tuple of offensiveCR and defensiveCR
         """
         if offense_ratio is None:
-            offense_ratio = random.random/2 + 0.5
+            offense_ratio = random.random()/2 + 0.5
         return (CR * (1 + offense_ratio), CR * (1-offense_ratio))
 
     def PB_from_CR(self, CR):
@@ -239,8 +267,6 @@ class Statblock_builder():
     def strong_DC_from_CR(self, CR):
         return self.tohit_from_CR(CR)+7
 
-        
-
 class Statblock():
     num_attributes = (
         'CR',
@@ -289,7 +315,7 @@ class Statblock():
         self.abilities = []
         self.spellcasting = None
         self.senses = []
-
+        self.basic_attack = None
 
         # Unpack kewword arguments
         for k, v in stats:
@@ -305,6 +331,8 @@ class Statblock():
                 self.proficiencies = v
             elif k == 'senses':
                 self.senses = v
+            elif k == 'basic_attack':
+                self.basic_attack = v
 
 
     def __getitem__(self, key):
@@ -317,9 +345,105 @@ class Statblock():
         return skill in self.proficiencies
 
     def get_basic_attack(self):
-        return self.actions[0]
+        if self.basic_attack:
+            return self.basic_attack
+        if isinstance(self.actions[0], Attack):
+            return self.actions[0]
+    
+    def format_number(self, n, length, is_integer=True, fail_case='?') -> str:
+        """Format number into a string of the appropriate length or shorter
 
+        Args:
+            n (int or float): The number to be formatted
+            length (int): The max length of the returned string
+            is_integer (bool, optional): Whether n should be treate as in int or float. Defaults to True.
+            fail_case (str, optional): returned string if formatting is nor possible.. Defaults to '?'.
 
+        Returns:
+            str: The formatted number
+        """
+        n = str(n)
+        if is_integer:
+            if len(n) <= length:
+                return n
+            else:
+                if len(n)-2 <= length:
+                    return n[:-3] + 'k'
+                else:
+                    if len(fail_case) <= length:
+                        return fail_case
+                    else:
+                        return '?'
+        else:
+            return fail_case
+
+    def format(self, style='compact'):
+        res = ''
+        if style == 'compact':
+            HP_max = self.attributes.get('HP_max', 0)
+            HP_cur = self.attributes.get('HP_cur', 0)
+            HP_max = self.format_number(HP_max, 4)
+            HP_cur = self.format_number(HP_cur, 4)
+
+            AC = self.attributes.get('AC', 10)
+            AC = self.format_number(AC, 2)
+
+            speed = self.attributes.get('Speed', 0)
+            speed = self.format_number(speed, 2)
+
+            strong_DC = self.attributes.get('strong_DC', 10)
+            strong_DC = self.format_number(strong_DC, 2)
+
+            weak_DC = self.attributes.get('weak_DC', 10)
+            weak_DC = self.format_number(weak_DC, 2)
+
+            ba = self.get_basic_attack()
+            n_attacks = self.format_number(ba.n_attacks, 1)
+            tohit = self.format_number(ba.tohit, 1)
+            n_dice = self.format_number(ba.n_dice, 1)
+            die_value = self.format_number(ba.die_value, 1)
+            damage_modifier = self.format_number(ba.damage_modifier, 1)
+
+            damage_type = ba.damage_type.abbr
+
+            res += '+============+\n'
+            res += '|HP {0:>4s}/{1:>4s}|\n'.format(HP_cur, HP_max)
+            res += '|AC {0:>2s}|Spd {1:>2s}|\n'.format(AC, speed)
+            res += '|Saves: {0:>2s}/{1:>2s}|\n'.format(strong_DC, weak_DC)
+            res += '+============+\n'
+            res += '|Atk: {0:1s}x {1:^4s}|\n'.format(n_attacks, damage_type)
+            res += '|+{0:<2s}→{1:>2s}d{2:<2s}+{3:<2s}|\n'.format(tohit, n_dice, die_value, damage_modifier)
+            res += '+============+'
+            # Example:
+            # '+============+'
+            # '|HP  123/ 200|'
+            # '|AC 13|Spd 30|'
+            # '|Saves: 12/16|'
+            # '+============+'
+            # '|Atk: 2x Piec|'
+            # '|+6 → 2d6 +3 |'
+            # '+============+'
         
+        return res
 
-            
+class Ability:
+    """Base class for all abilities
+    """
+    def __init__(self, name):
+        self.name = name
+
+class Attack(Ability):
+    """Class to hold an attack ability
+    """
+    def __init__(self, name, tohit, n_dice, die_size, modifier, damage_type, n_attacks=1):
+        super().__init__(name)
+        
+        self.tohit = tohit
+        self.n_dice = n_dice
+        self.die_size = die_size
+        self.modifier = modifier
+        self.damage_type = damage_type
+        self.n_attacks = n_attacks
+
+    def get_avg_damage(self):
+        return self.n_attacks * (self.n_dice * (self.die_size/2 + 0.5) + self.modifier)
