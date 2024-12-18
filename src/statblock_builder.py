@@ -1,43 +1,47 @@
+"""Contains StatblockBuilder and Statblock classes
+"""
 import random
 import math
-import enum
 
-from damage_types import *
+from damage_types import DamageType
 
 class StatblockBuilder():
     """Class to build Statblock instances
 
     """    
-    core_stat_names = ['CR', 'HP', 'AC', 'tohit', 'damage', 'save_DC', 'strong_save', 'weak_save']
+    core_stat_names = ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_DC', 'strong_save', 'weak_save']
 
     def __init__(self, seed = None):
         pass
 
-    def make_statblock_basic(self, CR, stats=dict(), offense_ratio=None, seed=None):
+    def make_statblock_basic(self, cr, stats=None, offense_ratio=None, seed=None):
         """Makes a Statblock object based losely on the DMG p.274 table. 
 
 
         Args:
-            CR (Int): Challenge rating of the monster, this is required.
+            cr (Int): Challenge rating of the monster, this is required.
             kwargs  : Optional conditions for the monster. The other stats
-                        will be adjusted to fit the CR.
+                        will be adjusted to fit the cr.
 
         Returns:
             Statblock: A Statblock object of the created monster.
         """ 
         random.seed(seed)
 
+        if stats is None:
+            stats = dict()
+
         for stat_name in StatblockBuilder.core_stat_names:
             stats.setdefault(stat_name, None)
 
-        OCR, DCR = self.get_offensive_defensive_CR(CR, offense_ratio)
-        HP, AC, strong_save, weak_save = self.get_defensive_stats(DCR, HP=stats['HP'], AC=stats['AC'])
-        tohit, damage, save_DC = self.get_offensive_stats(OCR, tohit=stats['tohit'], damage=stats['damage'], save_DC=stats['save_DC'])
+        Ocr, Dcr = self.get_offensive_defensive_cr(cr, offense_ratio)
+        hp, ac, strong_save, weak_save = self.get_defensive_stats(Dcr, hp=stats['hp'], ac=stats['ac'])
+        tohit, damage, save_DC = self.get_offensive_stats(Ocr, tohit=stats['tohit'], damage=stats['damage'], save_DC=stats['save_DC'])
 
-        stats['CR'] = CR
-        stats['HP_max'] = round(HP)
-        stats['HP_cur'] = round(HP)
-        stats['AC'] = round(AC)
+        stats['cr'] = cr
+        stats['hp_max'] = round(hp)
+        stats['hp_cur'] = round(hp)
+        stats['ac'] = round(ac)
         stats['tohit'] = round(tohit)
         stats['damage'] = round(damage)
         stats['save_DC'] = round(save_DC)
@@ -75,142 +79,142 @@ class StatblockBuilder():
         modifier = round(damage_target/n_attacks - n_dice*die_avg_damage)
         return Attack(name, tohit, n_dice, die_size, modifier, damage_type, n_attacks)
 
-    def get_offensive_defensive_CR(self, CR, offense_ratio=None):
-        """Splits CR in offensiveCR and defensiveCR based on some ratio
+    def get_offensive_defensive_cr(self, cr, offense_ratio=None):
+        """Splits cr in offensivecr and defensivecr based on some ratio
 
         Args:
-            CR (float): challenge rating of the monster
+            cr (float): challenge rating of the monster
             offense_ratio (float): number between 0 and 1.
 
         Returns:
-            (OCR, DCF): Tuple of offensiveCR and defensiveCR
+            (Ocr, DCF): Tuple of offensivecr and defensivecr
         """
         if offense_ratio is None:
             offense_ratio = random.random()/2 + 0.5
-        return (CR * (1 + offense_ratio), CR * (1-offense_ratio))
+        return (cr * (1 + offense_ratio), cr * (1-offense_ratio))
 
-    def PB_from_CR(self, CR):
-        if CR < 5:
+    def PB_from_cr(self, cr):
+        if cr < 5:
             return 2
         else:
-            return (CR+7)//4
+            return (cr+7)//4
         
-    def CR_from_PB(self, PB):
+    def cr_from_PB(self, PB):
         return PB * 4 - 6
     
-    def HP_from_CR(self, CR):
-        return 10 + 15*CR
+    def hp_from_cr(self, cr):
+        return 10 + 15*cr
 
-    def CR_from_HP(self, HP):
-        return (HP - 10)/15
+    def cr_from_hp(self, hp):
+        return (hp - 10)/15
     
-    def AC_from_CR(self, CR):
-        if CR < 0.5:
+    def ac_from_cr(self, cr):
+        if cr < 0.5:
             return 12
-        elif CR <= 1:
+        elif cr <= 1:
             return 13
         else:
-            return 13 + 0.35*CR
+            return 13 + 0.35*cr
 
-    def CR_from_AC(self, AC):
-        if AC <= 12:
+    def cr_from_ac(self, ac):
+        if ac <= 12:
             return 0.25
         else:
-            return (AC-12.5) * 3
+            return (ac-12.5) * 3
 
-    def defensive_CR(self, HP, AC, VRI_score):
-        """Computes CR based on only the defensiv stats of the monster.
+    def defensive_cr(self, hp, ac, VRI_score):
+        """Computes cr based on only the defensiv stats of the monster.
         The exact values are based on a reggression analysis of official
         DnD 5 monsters.
 
         Args:
-            HP (Float): HP of the monster
-            AC (Float): AC of the monster
+            hp (Float): hp of the monster
+            ac (Float): ac of the monster
             VRI_score (Float): A score based on the amount of vulnerabilites
                             resistances and immunities the monster has. Each
                             point equals 1% more expected damage taken.
 
         Returns:
-            CR (Float): Defensive CR of the monster
+            cr (Float): Defensive cr of the monster
         """
         b = -3.65
         a = [0.05376286, 0.30206772]
-        CR = b + HP * a[0] * (1 + VRI_score/100) + AC * a[1]
-        return CR
+        cr = b + hp * a[0] * (1 + VRI_score/100) + ac * a[1]
+        return cr
 
-    def get_defensive_stats(self, CR, HP=None, AC=None, HP_to_AC_ratio=0.5, random_interval=0):
-        """Computes defensive stats of the monster based in CR.
+    def get_defensive_stats(self, cr, hp=None, ac=None, hp_to_ac_ratio=0.5, random_interval=0):
+        """Computes defensive stats of the monster based in cr.
 
         Args:
-            CR (float): CR  of the monster
-            HP (float, optional): HP of the monster. Defaults to None.
-            AC (float, optional): AC of the monster. Defaults to None.
-            HP_to_AC_ratio (float, optional): Base ratio of the CR-budget that 
-                                            will be used on HP as opposed to AC. 
-                                            This is only used if no HP or AC are 
+            cr (float): cr  of the monster
+            hp (float, optional): hp of the monster. Defaults to None.
+            ac (float, optional): ac of the monster. Defaults to None.
+            hp_to_ac_ratio (float, optional): Base ratio of the cr-budget that 
+                                            will be used on hp as opposed to ac. 
+                                            This is only used if no hp or ac are 
                                             given Defaults to 0.5.
-            random_interval (float, optional): Determines how far the CR-budget is 
+            random_interval (float, optional): Determines how far the cr-budget is 
                                             allowed to randomly deviate. At one the 
                                             whole budget can randomly be used on 
-                                            either AC or HP. At zero, there is
+                                            either ac or hp. At zero, there is
                                             no random deviating. Defaults to 0.
 
         Returns:
-            (HP, AC): HP and AC that correspands to the given CR. If either or both 
+            (hp, ac): hp and ac that correspands to the given cr. If either or both 
             were given as arguments, they are passed back here.
         """
-        if AC is None and HP is None:
+        if ac is None and hp is None:
             if random_interval:
                 a = (random.random() - 0.5)*random_interval
                 b = random_interval - a
             else:
                 a, b = 0, 0
-            HP_modifier = 2 * HP_to_AC_ratio     + a
-            AC_modifier = 2 * (1-HP_to_AC_ratio) + b
+            hp_modifier = 2 * hp_to_ac_ratio     + a
+            ac_modifier = 2 * (1-hp_to_ac_ratio) + b
 
-            HP = self.HP_from_CR(CR * HP_modifier)
-            AC = self.AC_from_CR(CR * AC_modifier)
-        elif AC is None:
-            CR_AC = self.CR_from_AC(AC)
-            CR_HP = 2*CR - CR_AC
+            hp = self.hp_from_cr(cr * hp_modifier)
+            ac = self.ac_from_cr(cr * ac_modifier)
+        elif ac is None:
+            cr_ac = self.cr_from_ac(ac)
+            cr_hp = 2*cr - cr_ac
 
-            HP = self.HP_from_CR(CR_HP)
-        elif HP is None:
-            CR_HP = self.CR_from_HP(HP)
-            CR_AC = 2*CR - CR_HP
+            hp = self.hp_from_cr(cr_hp)
+        elif hp is None:
+            cr_hp = self.cr_from_hp(hp)
+            cr_ac = 2*cr - cr_hp
 
-            AC = self.AC_from_CR(AC)
+            ac = self.ac_from_cr(ac)
         
-        strong_save = self.strong_save_from_CR(CR)
+        strong_save = self.strong_save_from_cr(cr)
 
-        if CR <= 2:
+        if cr <= 2:
             weak_save = 10
-        elif CR <= 8:
+        elif cr <= 8:
             weak_save = 12
         else:
             weak_save = 13
         
-        return HP, AC, strong_save, weak_save
+        return hp, ac, strong_save, weak_save
 
-    def CR_from_tohit(self, tohit):
+    def cr_from_tohit(self, tohit):
         if tohit >= 5:
-            CR = (tohit-1)/2
+            cr = (tohit-1)/2
         else:
-            CR = 0.00335 * math.e**(1.33*tohit)
-        return CR
+            cr = 0.00335 * math.e**(1.33*tohit)
+        return cr
 
-    def CR_from_damage(self, damage):
+    def cr_from_damage(self, damage):
         if damage >= 10:
-            CR = (damage-1)/5
+            cr = (damage-1)/5
         else:
-            CR = 0.043 * math.e**(0.32*damage)
-        return CR
+            cr = 0.043 * math.e**(0.32*damage)
+        return cr
 
-    def CR_from_strong_save(self, strong_save):
-        return self.CR_from_tohit(strong_save-7)
+    def cr_from_strong_save(self, strong_save):
+        return self.cr_from_tohit(strong_save-7)
 
-    def offensive_CR(self, tohit, damage, strong_save=None, save_att_ratio=0.25):
-        """Compute CR based only on the monsters offensive stats.
+    def offensive_cr(self, tohit, damage, strong_save=None, save_att_ratio=0.25):
+        """Compute cr based only on the monsters offensive stats.
 
         Args:
             tohit (float): The monsters tohit stat (i.e. the bonus to attack rolls)
@@ -219,24 +223,24 @@ class StatblockBuilder():
             save_att_ratio (float, optional): The ratio of damage the monster is expected to do from saving throws, and not attacks. Defaults to 0.25.
 
         Returns:
-            float: Offensive CR
+            float: Offensive cr
         """
-        CR_tohit = self.CR_from_tohit(tohit)
-        CR_damage = self.CR_from_damage(damage)
+        cr_tohit = self.cr_from_tohit(tohit)
+        cr_damage = self.cr_from_damage(damage)
 
-        CR_avg = (CR_damage + CR_tohit)/2
+        cr_avg = (cr_damage + cr_tohit)/2
 
         if strong_save:
-            CR_strong_save = self.CR_from_strong_save(strong_save)
-            CR_avg = CR_avg*(1-save_att_ratio) + CR_strong_save*save_att_ratio
+            cr_strong_save = self.cr_from_strong_save(strong_save)
+            cr_avg = cr_avg*(1-save_att_ratio) + cr_strong_save*save_att_ratio
 
-        return CR_avg
+        return cr_avg
 
-    def get_offensive_stats(self, CR, tohit=None, damage=None, save_DC=None, save_att_ratio=0.25) -> tuple[float, float, float]:
-        """Computes the offensive stats of a monster based on CR
+    def get_offensive_stats(self, cr, tohit=None, damage=None, save_DC=None, save_att_ratio=0.25) -> tuple[float, float, float]:
+        """Computes the offensive stats of a monster based on cr
 
         Args:
-            CR (float): CR of the monster
+            cr (float): cr of the monster
             save_att_ratio (float, optional): Ratio of DC to attack. Defaults to 0.25.
 
         Returns:
@@ -248,49 +252,48 @@ class StatblockBuilder():
             tohit_ratio = 1 + (0.5-a)*0.8
             damage_ratio = 1 + (0.5-b)*0.8
 
-            tohit = self.tohit_from_CR(CR * tohit_ratio)
-            damage = self.damage_from_CR(CR * damage_ratio)
-            strong_save = self.strong_save_from_CR(CR * tohit_ratio * save_att_ratio)
+            tohit = self.tohit_from_cr(cr * tohit_ratio)
+            damage = self.damage_from_cr(cr * damage_ratio)
         elif tohit is None:
-            CR_tohit = self.CR_from_tohit(tohit)
-            CR_damage = 2*CR - CR_tohit
+            cr_tohit = self.cr_from_tohit(tohit)
+            cr_damage = 2*cr - cr_tohit
 
-            damage = self.damage_from_CR(CR_damage)
+            damage = self.damage_from_cr(cr_damage)
         elif damage is None:
-            CR_damage = self.CR_from_damage(CR_damage)
-            CR_tohit = 2*CR - CR_damage
+            cr_damage = self.cr_from_damage(cr_damage)
+            cr_tohit = 2*cr - cr_damage
 
-            tohit = self.tohit_from_CR(CR_tohit)
+            tohit = self.tohit_from_cr(cr_tohit)
 
         if save_DC is None:
-            save_DC = self.save_DC_from_CR(CR * tohit_ratio * save_att_ratio)
+            save_DC = self.save_DC_from_cr(cr * tohit_ratio * save_att_ratio)
 
         return tohit, damage, save_DC
 
-    def tohit_from_CR(self, CR):
-        if CR >= 1:
-            return (CR + 7)/2
+    def tohit_from_cr(self, cr):
+        if cr >= 1:
+            return (cr + 7)/2
         else:
-            return 0.75 * math.log(300*CR)
+            return 0.75 * math.log(300*cr)
     
-    def damage_from_CR(self, CR):
-        if CR >= 1:
-            return (CR+1)*5
+    def damage_from_cr(self, cr):
+        if cr >= 1:
+            return (cr+1)*5
         else:
-            return 3.125 * math.log(23.3 * CR)
+            return 3.125 * math.log(23.3 * cr)
     
-    def save_DC_from_CR(self, CR):
-        return self.tohit_from_CR(CR)+7
+    def save_DC_from_cr(self, cr):
+        return self.tohit_from_cr(cr)+7
     
-    def strong_save_from_CR(self, CR):
-        return self.AC_from_CR(CR) -1
+    def strong_save_from_cr(self, cr):
+        return self.ac_from_cr(cr) -1
 
 class Statblock():
     num_attributes = (
-        'CR',
-        'AC',
-        'HP_max',
-        'HP_cur',
+        'cr',
+        'ac',
+        'hp_max',
+        'hp_cur',
         'Speed',
         'Str',
         'Dex',
@@ -311,7 +314,7 @@ class Statblock():
     )
     skills = (
         'Athletics',
-        'Acrobatics',
+        'acrobatics',
         'Sleight of Hand',
         'Stealth',
         'Arcana',
@@ -358,9 +361,9 @@ class Statblock():
 
 
     def __getitem__(self, key):
-        try:
+        if key in self.attributes:
             return self.attributes[key]
-        except:
+        else:
             raise AttributeError(self + ' does not have attribute ' + key)
 
     def is_proficient(self, skill):
@@ -402,13 +405,13 @@ class Statblock():
     def format(self, style='compact'):
         res = ''
         if style == 'compact':
-            HP_max = self.attributes.get('HP_max', 0)
-            HP_cur = self.attributes.get('HP_cur', 0)
-            HP_max = self.format_number(HP_max, 4)
-            HP_cur = self.format_number(HP_cur, 4)
+            hp_max = self.attributes.get('hp_max', 0)
+            hp_cur = self.attributes.get('hp_cur', 0)
+            hp_max = self.format_number(hp_max, 4)
+            hp_cur = self.format_number(hp_cur, 4)
 
-            AC = self.attributes.get('AC', 10)
-            AC = self.format_number(AC, 2)
+            ac = self.attributes.get('ac', 10)
+            ac = self.format_number(ac, 2)
 
             speed = self.attributes.get('Speed', 0)
             speed = self.format_number(speed, 2)
@@ -429,8 +432,8 @@ class Statblock():
             damage_type = ba.damage_type.abbr
 
             res += '+============+\n'
-            res += '|HP {0:>4s}/{1:>4s}|\n'.format(HP_cur, HP_max)
-            res += '|AC {0:>2s}|Spd {1:>2s}|\n'.format(AC, speed)
+            res += '|hp {0:>4s}/{1:>4s}|\n'.format(hp_cur, hp_max)
+            res += '|ac {0:>2s}|Spd {1:>2s}|\n'.format(ac, speed)
             res += '|Saves: {0:>2s}/{1:>2s}|\n'.format(strong_save, weak_DC)
             res += '+============+\n'
             res += '|Atk: {0:1s}x {1:^4s}|\n'.format(n_attacks, damage_type)
@@ -438,8 +441,8 @@ class Statblock():
             res += '+============+'
             # Example:
             # '+============+'
-            # '|HP  123/ 200|'
-            # '|AC 13|Spd 30|'
+            # '|hp  123/ 200|'
+            # '|ac 13|Spd 30|'
             # '|Saves: 12/16|'
             # '+============+'
             # '|Atk: 2x Piec|'
