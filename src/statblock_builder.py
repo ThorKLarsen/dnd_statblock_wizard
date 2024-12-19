@@ -3,13 +3,14 @@
 import random
 import math
 
+from scipy import optimize
+
 from damage_types import DamageType
 
 class StatblockBuilder():
     """Class to build Statblock instances
-
-    """    
-    core_stat_names = ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_DC', 'strong_save', 'weak_save']
+    """
+    core_stat_names = ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_dc', 'strong_save', 'weak_save']
 
     def __init__(self, seed = None):
         pass
@@ -25,7 +26,7 @@ class StatblockBuilder():
 
         Returns:
             Statblock: A Statblock object of the created monster.
-        """ 
+        """
         random.seed(seed)
 
         if stats is None:
@@ -34,9 +35,9 @@ class StatblockBuilder():
         for stat_name in StatblockBuilder.core_stat_names:
             stats.setdefault(stat_name, None)
 
-        Ocr, Dcr = self.get_offensive_defensive_cr(cr, offense_ratio)
-        hp, ac, strong_save, weak_save = self.get_defensive_stats(Dcr, hp=stats['hp'], ac=stats['ac'])
-        tohit, damage, save_DC = self.get_offensive_stats(Ocr, tohit=stats['tohit'], damage=stats['damage'], save_DC=stats['save_DC'])
+        off_cr, def_cr = self.split_cr(cr, offense_ratio)
+        hp, ac, strong_save, weak_save = self.get_defensive_stats(def_cr, hp=stats['hp'], ac=stats['ac'])
+        tohit, damage, save_dc = self.get_offensive_stats(off_cr, tohit=stats['tohit'], damage=stats['damage'], save_dc=stats['save_dc'])
 
         stats['cr'] = cr
         stats['hp_max'] = round(hp)
@@ -44,7 +45,7 @@ class StatblockBuilder():
         stats['ac'] = round(ac)
         stats['tohit'] = round(tohit)
         stats['damage'] = round(damage)
-        stats['save_DC'] = round(save_DC)
+        stats['save_dc'] = round(save_dc)
         stats['strong_save'] = round(strong_save)
         stats['weak_save'] = round(weak_save)
 
@@ -60,6 +61,22 @@ class StatblockBuilder():
         return statblock
 
     def make_attack(self, name, damage_type, tohit, damage_target, die_size = None, n_attacks=None):
+        """Makes an Attack object based on the given arguments.
+        Die size (e.i. d4, d6, etc.) and number of attacks can be fixed.
+        The other attrubutes will be computed from 'damage_target'.
+        The to hit bonus is not factored into any damage calculations.
+
+        Args:
+            name (string): Name of the attack 'Slam, Longsword, Firebolt, etc.
+            damage_type (enum): The damage type of the attack. Should be an instance of DamageTypes. 
+            tohit (int): To hit bonus of the attack.
+            damage_target (float): The damage of the attack assuming it hits.
+            die_size (int, optional): The die size used, i.e. d4, d6, etc. Defaults to None.
+            n_attacks (int, optional): Number of attacks. Defaults to None.
+
+        Returns:
+            attack: Attack object with apprx. the desired damage.
+        """
         if die_size is None:
             die_size = random.choice((4,6,8,12))
             if damage_target > 50 and die_size == 4:
@@ -76,39 +93,80 @@ class StatblockBuilder():
                 n_attacks = 1
         else:
             n_dice = (damage_target/n_attacks)//die_avg_damage
+        n_dice = round(n_dice)
         modifier = round(damage_target/n_attacks - n_dice*die_avg_damage)
         return Attack(name, tohit, n_dice, die_size, modifier, damage_type, n_attacks)
 
-    def get_offensive_defensive_cr(self, cr, offense_ratio=None):
-        """Splits cr in offensivecr and defensivecr based on some ratio
+    def split_cr(self, cr, offense_ratio=None):
+        """Splits cr in offensive_cr and defensive_cr based on some ratio
 
         Args:
             cr (float): challenge rating of the monster
             offense_ratio (float): number between 0 and 1.
 
         Returns:
-            (Ocr, DCF): Tuple of offensivecr and defensivecr
+            (off_cr, def_cr): Tuple of offensive_cr and defensive_cr
         """
         if offense_ratio is None:
-            offense_ratio = random.random()/2 + 0.5
+            offense_ratio = random.random()/2 - 0.5
         return (cr * (1 + offense_ratio), cr * (1-offense_ratio))
 
-    def PB_from_cr(self, cr):
+    def pb_from_cr(self, cr):
+        """Proficiency bonus computed from CR
+
+        Args:
+            cr (float): Challnenge rating of the monster
+
+        Returns:
+            float: proficiency bonus
+        """
         if cr < 5:
             return 2
         else:
-            return (cr+7)//4
+            return (cr+7)/4
         
-    def cr_from_PB(self, PB):
-        return PB * 4 - 6
+    def cr_from_pb(self, pb):
+        """Challenge rating computed from proficiency bonus
+
+        Args:
+            pb (float): proficiency bonus
+
+        Returns:
+            float: Challenge rating
+        """
+        return pb * 4 - 6
     
     def hp_from_cr(self, cr):
+        """HP computed from challenge rating
+
+        Args:
+            cr (float): challenge rating
+
+        Returns:
+            float: HP of the monster
+        """
         return 10 + 15*cr
 
     def cr_from_hp(self, hp):
+        """Challenge rating computed from HP
+
+        Args:
+            hp (float): health points
+
+        Returns:
+            float: challenge rating
+        """
         return (hp - 10)/15
     
     def ac_from_cr(self, cr):
+        """Armor class computed from challenge rating
+
+        Args:
+            cr (float): challenge rating
+
+        Returns:
+            float: armor class
+        """
         if cr < 0.5:
             return 12
         elif cr <= 1:
@@ -117,12 +175,20 @@ class StatblockBuilder():
             return 13 + 0.35*cr
 
     def cr_from_ac(self, ac):
+        """Challeneg rating from armor class
+
+        Args:
+            ac (float): armor class
+
+        Returns:
+            float: challeneg rating
+        """
         if ac <= 12:
             return 0.25
         else:
             return (ac-12.5) * 3
 
-    def defensive_cr(self, hp, ac, VRI_score):
+    def defensive_cr(self, hp, ac, vri_score):
         """Computes cr based on only the defensiv stats of the monster.
         The exact values are based on a reggression analysis of official
         DnD 5 monsters.
@@ -130,7 +196,7 @@ class StatblockBuilder():
         Args:
             hp (Float): hp of the monster
             ac (Float): ac of the monster
-            VRI_score (Float): A score based on the amount of vulnerabilites
+            vri_score (Float): A score based on the amount of vulnerabilites
                             resistances and immunities the monster has. Each
                             point equals 1% more expected damage taken.
 
@@ -139,10 +205,17 @@ class StatblockBuilder():
         """
         b = -3.65
         a = [0.05376286, 0.30206772]
-        cr = b + hp * a[0] * (1 + VRI_score/100) + ac * a[1]
+        cr = b + hp * a[0] * (1 + vri_score/100) + ac * a[1]
         return cr
 
-    def get_defensive_stats(self, cr, hp=None, ac=None, hp_to_ac_ratio=0.5, random_interval=0):
+    def get_defensive_stats(
+            self,
+            cr,
+            hp=None,
+            ac=None,
+            hp_to_ac_ratio=0.5,
+            random_interval=0.2
+        ):
         """Computes defensive stats of the monster based in cr.
 
         Args:
@@ -171,19 +244,19 @@ class StatblockBuilder():
                 a, b = 0, 0
             hp_modifier = 2 * hp_to_ac_ratio     + a
             ac_modifier = 2 * (1-hp_to_ac_ratio) + b
-
+            
             hp = self.hp_from_cr(cr * hp_modifier)
             ac = self.ac_from_cr(cr * ac_modifier)
-        elif ac is None:
+        elif hp is None:
             cr_ac = self.cr_from_ac(ac)
             cr_hp = 2*cr - cr_ac
 
             hp = self.hp_from_cr(cr_hp)
-        elif hp is None:
+        elif ac is None:
             cr_hp = self.cr_from_hp(hp)
             cr_ac = 2*cr - cr_hp
 
-            ac = self.ac_from_cr(ac)
+            ac = self.ac_from_cr(cr_ac)
         
         strong_save = self.strong_save_from_cr(cr)
 
@@ -212,15 +285,21 @@ class StatblockBuilder():
 
     def cr_from_strong_save(self, strong_save):
         return self.cr_from_tohit(strong_save-7)
+    
+    def cr_from_save_dc(self, save_dc):
+        return self.cr_from_ac(save_dc+2)
 
     def offensive_cr(self, tohit, damage, strong_save=None, save_att_ratio=0.25):
         """Compute cr based only on the monsters offensive stats.
 
         Args:
             tohit (float): The monsters tohit stat (i.e. the bonus to attack rolls)
-            damage (float): The monsters average damage per round assuming the attack, spell or ability hits.
-            strong_save (float, optional): The monsters save DC for spells or abilities, if any. Defaults to None.
-            save_att_ratio (float, optional): The ratio of damage the monster is expected to do from saving throws, and not attacks. Defaults to 0.25.
+            damage (float): The monsters average damage per round assuming the attack, 
+                            spell or ability hits.
+            strong_save (float, optional): The monsters save dc for spells or abilities, 
+                            if any. Defaults to None.
+            save_att_ratio (float, optional): The ratio of damage the monster is expected 
+                            to do from saving throws, and not attacks. Defaults to 0.25.
 
         Returns:
             float: Offensive cr
@@ -236,15 +315,22 @@ class StatblockBuilder():
 
         return cr_avg
 
-    def get_offensive_stats(self, cr, tohit=None, damage=None, save_DC=None, save_att_ratio=0.25) -> tuple[float, float, float]:
+    def get_offensive_stats(
+            self,
+            cr,
+            tohit=None,
+            damage=None,
+            save_dc=None,
+            save_att_ratio=0.25
+        ) -> tuple[float, float, float]:
         """Computes the offensive stats of a monster based on cr
 
         Args:
             cr (float): cr of the monster
-            save_att_ratio (float, optional): Ratio of DC to attack. Defaults to 0.25.
+            save_att_ratio (float, optional): Ratio of dc to attack. Defaults to 0.25.
 
         Returns:
-            (tohit, damage, save_DC): Tuple of offensive stats
+            (tohit, damage, save_dc): Tuple of offensive stats
         """
         if tohit is None and damage is None:
             a = random.random()
@@ -265,10 +351,10 @@ class StatblockBuilder():
 
             tohit = self.tohit_from_cr(cr_tohit)
 
-        if save_DC is None:
-            save_DC = self.save_DC_from_cr(cr * tohit_ratio * save_att_ratio)
+        if save_dc is None:
+            save_dc = self.save_dc_from_cr(cr * tohit_ratio * save_att_ratio)
 
-        return tohit, damage, save_DC
+        return tohit, damage, save_dc
 
     def tohit_from_cr(self, cr):
         if cr >= 1:
@@ -282,11 +368,93 @@ class StatblockBuilder():
         else:
             return 3.125 * math.log(23.3 * cr)
     
-    def save_DC_from_cr(self, cr):
+    def save_dc_from_cr(self, cr):
         return self.tohit_from_cr(cr)+7
     
     def strong_save_from_cr(self, cr):
         return self.ac_from_cr(cr) -1
+    
+    def make_statblock_optimize(self, cr, stats=None, offense_ratio=None, seed=None):
+        # ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_dc', 'strong_save', 'weak_save']
+        random.seed(seed)
+        fixed_index = []
+        fixed_value = []
+
+        x = self._optimize_guess(cr)
+        if stats is None:
+            stats = {'cr': cr}
+        else:
+            stats['cr'] = cr
+        for i, name in enumerate(self.core_stat_names):
+            if name in stats:
+                fixed_index.append(i)
+                fixed_value.append(stats[name])
+
+        for i in sorted(fixed_index, reverse=True):
+            del x[i]
+
+        sol = optimize.minimize(
+            self._optimize_objective_function, 
+            x,
+            (fixed_index, fixed_value),
+            bounds=self._optimize_bounds(fixed_index),
+            tol=0.0001  
+        )
+        # print(sol)
+        sol = list(sol.x)
+        for i, v in zip(fixed_index, fixed_value):
+            sol.insert(i, v)
+
+        return sol
+
+
+    def _optimize_guess(self, cr):
+        hp, ac, strong_save, weak_save = self.get_defensive_stats(cr)
+        tohit, damage, save_dc = self.get_offensive_stats(cr)
+        return [cr, hp, ac, tohit, damage, save_dc, strong_save, weak_save]
+    
+    def _optimize_bounds(self, fixed_index):
+        bounds = [
+            (None, None), # cr
+            (0, None), # hp
+            (1, 29), # ac
+            (-5, 29), # tohit
+            (0, None), # damage
+            (7, 29), # save dc
+            (-5, 29), # strong save
+            (-5, 29), # weak save
+        ]
+        for i in sorted(fixed_index, reverse=True):
+            del bounds[i]
+        return bounds
+
+    def _optimize_objective_function(self, x_var, fixed_index, fixed_value):
+        x = list(x_var.copy())
+        for i, v in zip(fixed_index, fixed_value):
+            x.insert(i, v)
+
+        target_cr = x[0]
+        cr = []
+
+        cr.append(self.cr_from_hp(x[1]))
+        cr.append(self.cr_from_ac(x[2]))
+        cr.append(self.cr_from_tohit(x[3]))
+        cr.append(self.cr_from_damage(x[4]))
+        cr.append(self.cr_from_save_dc(x[5]))
+        cr.append(self.cr_from_strong_save(x[6]))
+
+        weights = [
+            1.0,
+            0.6,
+            1.0,
+            1.0,
+            0.2,
+            0.2,
+        ]
+
+        computed_cr = sum(c*w for c, w in zip(cr, weights))/sum(weights)
+        return abs(target_cr - computed_cr)
+
 
 class Statblock():
     num_attributes = (
@@ -301,8 +469,8 @@ class Statblock():
         'Int',
         'Wis',
         'Cha',
-        'PB',
-        'save_DC',
+        'pb',
+        'save_dc',
         'strong_save',
         'weak_save'
     )
@@ -403,6 +571,16 @@ class Statblock():
             return fail_case
 
     def format(self, style='compact'):
+        """Returns a formatted string of the statblock.
+        Supported styles are:
+        * compact - Displays on the minimum information to run the monsters.
+
+        Args:
+            style (str, optional): Display style. Defaults to 'compact'.
+
+        Returns:
+            str: Statblock string
+        """
         res = ''
         if style == 'compact':
             hp_max = self.attributes.get('hp_max', 0)
@@ -419,22 +597,22 @@ class Statblock():
             strong_save = self.attributes.get('strong_save', 10)
             strong_save = self.format_number(strong_save, 2)
 
-            weak_DC = self.attributes.get('weak_DC', 10)
-            weak_DC = self.format_number(weak_DC, 2)
+            weak_dc = self.attributes.get('weak_dc', 10)
+            weak_dc = self.format_number(weak_dc, 2)
 
             ba = self.get_basic_attack()
             n_attacks = self.format_number(ba.n_attacks, 1)
-            tohit = self.format_number(ba.tohit, 1)
-            n_dice = self.format_number(ba.n_dice, 1)
-            die_size = self.format_number(ba.die_size, 1)
-            damage_modifier = self.format_number(ba.modifier, 1)
+            tohit = self.format_number(ba.tohit, 2)
+            n_dice = self.format_number(ba.n_dice, 2)
+            die_size = self.format_number(ba.die_size, 2)
+            damage_modifier = self.format_number(ba.modifier, 2)
 
             damage_type = ba.damage_type.abbr
 
             res += '+============+\n'
             res += '|hp {0:>4s}/{1:>4s}|\n'.format(hp_cur, hp_max)
             res += '|ac {0:>2s}|Spd {1:>2s}|\n'.format(ac, speed)
-            res += '|Saves: {0:>2s}/{1:>2s}|\n'.format(strong_save, weak_DC)
+            res += '|Saves: {0:>2s}/{1:>2s}|\n'.format(strong_save, weak_dc)
             res += '+============+\n'
             res += '|Atk: {0:1s}x {1:^4s}|\n'.format(n_attacks, damage_type)
             res += '|+{0:<2s}→{1:>2s}d{2:<2s}+{3:<2s}|\n'.format(tohit, n_dice, die_size, damage_modifier)
@@ -448,7 +626,7 @@ class Statblock():
             # '|Atk: 2x Piec|'
             # '|+6 → 2d6 +3 |'
             # '+============+'
-        
+
         return res
 
 class Ability:
@@ -462,7 +640,7 @@ class Attack(Ability):
     """
     def __init__(self, name, tohit, n_dice, die_size, modifier, damage_type, n_attacks=1):
         super().__init__(name)
-        
+
         self.tohit = tohit
         self.n_dice = n_dice
         self.die_size = die_size
