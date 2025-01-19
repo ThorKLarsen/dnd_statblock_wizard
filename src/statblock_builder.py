@@ -6,6 +6,8 @@ import math
 from scipy import optimize
 
 from damage_types import DamageType
+from statblock import Statblock
+from abilities import Attack
 
 class StatblockBuilder():
     """Class to build Statblock instances
@@ -111,83 +113,6 @@ class StatblockBuilder():
             offense_ratio = random.random()/2 - 0.5
         return (cr * (1 + offense_ratio), cr * (1-offense_ratio))
 
-    def pb_from_cr(self, cr):
-        """Proficiency bonus computed from CR
-
-        Args:
-            cr (float): Challnenge rating of the monster
-
-        Returns:
-            float: proficiency bonus
-        """
-        if cr < 5:
-            return 2
-        else:
-            return (cr+7)/4
-        
-    def cr_from_pb(self, pb):
-        """Challenge rating computed from proficiency bonus
-
-        Args:
-            pb (float): proficiency bonus
-
-        Returns:
-            float: Challenge rating
-        """
-        return pb * 4 - 6
-    
-    def hp_from_cr(self, cr):
-        """HP computed from challenge rating
-
-        Args:
-            cr (float): challenge rating
-
-        Returns:
-            float: HP of the monster
-        """
-        return 10 + 15*cr
-
-    def cr_from_hp(self, hp):
-        """Challenge rating computed from HP
-
-        Args:
-            hp (float): health points
-
-        Returns:
-            float: challenge rating
-        """
-        return (hp - 10)/15
-    
-    def ac_from_cr(self, cr):
-        """Armor class computed from challenge rating
-
-        Args:
-            cr (float): challenge rating
-
-        Returns:
-            float: armor class
-        """
-        if cr < 0.5:
-            return 12
-        elif cr <= 1:
-            return 13
-        else:
-            return 13 + 0.35*cr
-
-    def cr_from_ac(self, ac):
-        """Challeneg rating from armor class
-
-        Args:
-            ac (float): armor class
-
-        Returns:
-            float: challeneg rating
-        """
-        if ac <= 12:
-            return 0.25
-        else:
-            return (ac-12.5) * 3
-
     def defensive_cr(self, hp, ac, vri_score):
         """Computes cr based on only the defensiv stats of the monster.
         The exact values are based on a reggression analysis of official
@@ -261,33 +186,13 @@ class StatblockBuilder():
         strong_save = self.strong_save_from_cr(cr)
 
         if cr <= 2:
-            weak_save = 10
+            weak_save = 0
         elif cr <= 8:
-            weak_save = 12
+            weak_save = 2
         else:
-            weak_save = 13
+            weak_save = 3
         
         return hp, ac, strong_save, weak_save
-
-    def cr_from_tohit(self, tohit):
-        if tohit >= 5:
-            cr = (tohit-1)/2
-        else:
-            cr = 0.00335 * math.e**(1.33*tohit)
-        return cr
-
-    def cr_from_damage(self, damage):
-        if damage >= 10:
-            cr = (damage-1)/5
-        else:
-            cr = 0.043 * math.e**(0.32*damage)
-        return cr
-
-    def cr_from_strong_save(self, strong_save):
-        return self.cr_from_tohit(strong_save-7)
-    
-    def cr_from_save_dc(self, save_dc):
-        return self.cr_from_ac(save_dc+2)
 
     def offensive_cr(self, tohit, damage, strong_save=None, save_att_ratio=0.25):
         """Compute cr based only on the monsters offensive stats.
@@ -355,6 +260,106 @@ class StatblockBuilder():
             save_dc = self.save_dc_from_cr(cr * tohit_ratio * save_att_ratio)
 
         return tohit, damage, save_dc
+    
+    #region cr_from_x
+    def cr_from_pb(self, pb):
+        """Challenge rating computed from proficiency bonus
+
+        Args:
+            pb (float): proficiency bonus
+
+        Returns:
+            float: Challenge rating
+        """
+        return pb * 4 - 6
+
+    def cr_from_hp(self, hp):
+        """Challenge rating computed from HP
+
+        Args:
+            hp (float): health points
+
+        Returns:
+            float: challenge rating
+        """
+        return (hp - 10)/15
+
+    def cr_from_ac(self, ac):
+        """Challeneg rating from armor class
+
+        Args:
+            ac (float): armor class
+
+        Returns:
+            float: challeneg rating
+        """
+        if ac <= 12:
+            return 0.25
+        else:
+            return (ac-12.5) * 3
+
+    def cr_from_tohit(self, tohit):
+        if tohit >= 5:
+            cr = (tohit-1)/2
+        else:
+            cr = 0.00335 * math.e**(1.33*tohit)
+        return cr
+
+    def cr_from_damage(self, damage):
+        if damage >= 10:
+            cr = (damage-1)/5
+        else:
+            cr = 0.043 * math.e**(0.32*damage)
+        return cr
+
+    def cr_from_strong_save(self, strong_save):
+        return self.cr_from_tohit(strong_save-7)
+    
+    def cr_from_save_dc(self, save_dc):
+        return self.cr_from_ac(save_dc+2)
+    #endregion
+
+    #region x_from_cr
+    def pb_from_cr(self, cr):
+        """Proficiency bonus computed from CR
+
+        Args:
+            cr (float): Challnenge rating of the monster
+
+        Returns:
+            float: proficiency bonus
+        """
+        if cr < 5:
+            return 2
+        else:
+            return (cr+7)/4
+
+    def hp_from_cr(self, cr):
+        """HP computed from challenge rating
+
+        Args:
+            cr (float): challenge rating
+
+        Returns:
+            float: HP of the monster
+        """
+        return 10 + 15*cr
+
+    def ac_from_cr(self, cr):
+        """Armor class computed from challenge rating
+
+        Args:
+            cr (float): challenge rating
+
+        Returns:
+            float: armor class
+        """
+        if cr < 0.5:
+            return 12
+        elif cr <= 1:
+            return 13
+        else:
+            return 13 + 0.35*cr
 
     def tohit_from_cr(self, cr):
         if cr >= 1:
@@ -372,8 +377,28 @@ class StatblockBuilder():
         return self.tohit_from_cr(cr)+7
     
     def strong_save_from_cr(self, cr):
-        return self.ac_from_cr(cr) -1
+        return self.ac_from_cr(cr) -11
+    #endregion
+
+    #region bounds
+    def _hp_bound(self, hp, cr):
+        if hp < cr:
+            return cr
+        elif hp > 50*cr:
+            return 50*cr
+        return hp
     
+    def _ac_bound(self, ac, cr):
+        if ac < 0:
+            return 0
+        elif cr < 2 and ac > 18:
+            return 18
+        elif ac > 30:
+            return 30
+        return ac
+    #endregion
+
+    #region optimize
     def make_statblock_optimize(self, cr, stats=None, offense_ratio=None, seed=None):
         # ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_dc', 'strong_save', 'weak_save']
         random.seed(seed)
@@ -406,7 +431,6 @@ class StatblockBuilder():
             sol.insert(i, v)
 
         return sol
-
 
     def _optimize_guess(self, cr):
         hp, ac, strong_save, weak_save = self.get_defensive_stats(cr)
@@ -454,199 +478,4 @@ class StatblockBuilder():
 
         computed_cr = sum(c*w for c, w in zip(cr, weights))/sum(weights)
         return abs(target_cr - computed_cr)
-
-
-class Statblock():
-    num_attributes = (
-        'cr',
-        'ac',
-        'hp_max',
-        'hp_cur',
-        'Speed',
-        'Str',
-        'Dex',
-        'Con',
-        'Int',
-        'Wis',
-        'Cha',
-        'pb',
-        'save_dc',
-        'strong_save',
-        'weak_save'
-    )
-    str_attributes = (
-        'Name',
-        'Type',
-        'Alignment',
-
-    )
-    skills = (
-        'Athletics',
-        'acrobatics',
-        'Sleight of Hand',
-        'Stealth',
-        'Arcana',
-        'History',
-        'Investigation',
-        'Nature',
-        'Religion',
-        'Animal Handling',
-        'Insight',
-        'Medicine',
-        'Perception',
-        'Survival',
-        'Deception',
-        'Intimidation',
-        'Performance',
-        'Persuasion',
-    )
-
-    def __init__(self, stats):
-        self.attributes = {}
-        self.proficiencies = []
-        self.actions = []
-        self.abilities = []
-        self.spellcasting = None
-        self.senses = []
-        self.basic_attack = None
-
-        # Unpack kewword arguments
-        for k, v in stats.items():
-            if k in Statblock.num_attributes:
-                self.attributes[k] = v
-            elif k == 'actions':
-                self.actions = v
-            elif k == 'abilities':
-                self.abilities = v
-            elif k == 'spellcasting':
-                self.spellcasting = v
-            elif k == 'skills':
-                self.proficiencies = v
-            elif k == 'senses':
-                self.senses = v
-            elif k == 'basic_attack':
-                self.basic_attack = v
-
-
-    def __getitem__(self, key):
-        if key in self.attributes:
-            return self.attributes[key]
-        else:
-            raise AttributeError(self + ' does not have attribute ' + key)
-
-    def is_proficient(self, skill):
-        return skill in self.proficiencies
-
-    def get_basic_attack(self):
-        if self.basic_attack:
-            return self.basic_attack
-        if isinstance(self.actions[0], Attack):
-            return self.actions[0]
-    
-    def format_number(self, n, length, is_integer=True, fail_case='?') -> str:
-        """Format number into a string of the appropriate length or shorter
-
-        Args:
-            n (int or float): The number to be formatted
-            length (int): The max length of the returned string
-            is_integer (bool, optional): Whether n should be treate as in int or float. Defaults to True.
-            fail_case (str, optional): returned string if formatting is nor possible.. Defaults to '?'.
-
-        Returns:
-            str: The formatted number
-        """
-        n = str(n)
-        if is_integer:
-            if len(n) <= length:
-                return n
-            else:
-                if len(n)-2 <= length:
-                    return n[:-3] + 'k'
-                else:
-                    if len(fail_case) <= length:
-                        return fail_case
-                    else:
-                        return '?'
-        else:
-            return fail_case
-
-    def format(self, style='compact'):
-        """Returns a formatted string of the statblock.
-        Supported styles are:
-        * compact - Displays on the minimum information to run the monsters.
-
-        Args:
-            style (str, optional): Display style. Defaults to 'compact'.
-
-        Returns:
-            str: Statblock string
-        """
-        res = ''
-        if style == 'compact':
-            hp_max = self.attributes.get('hp_max', 0)
-            hp_cur = self.attributes.get('hp_cur', 0)
-            hp_max = self.format_number(hp_max, 4)
-            hp_cur = self.format_number(hp_cur, 4)
-
-            ac = self.attributes.get('ac', 10)
-            ac = self.format_number(ac, 2)
-
-            speed = self.attributes.get('Speed', 0)
-            speed = self.format_number(speed, 2)
-
-            strong_save = self.attributes.get('strong_save', 10)
-            strong_save = self.format_number(strong_save, 2)
-
-            weak_dc = self.attributes.get('weak_dc', 10)
-            weak_dc = self.format_number(weak_dc, 2)
-
-            ba = self.get_basic_attack()
-            n_attacks = self.format_number(ba.n_attacks, 1)
-            tohit = self.format_number(ba.tohit, 2)
-            n_dice = self.format_number(ba.n_dice, 2)
-            die_size = self.format_number(ba.die_size, 2)
-            damage_modifier = self.format_number(ba.modifier, 2)
-
-            damage_type = ba.damage_type.abbr
-
-            res += '+============+\n'
-            res += '|hp {0:>4s}/{1:>4s}|\n'.format(hp_cur, hp_max)
-            res += '|ac {0:>2s}|Spd {1:>2s}|\n'.format(ac, speed)
-            res += '|Saves: {0:>2s}/{1:>2s}|\n'.format(strong_save, weak_dc)
-            res += '+============+\n'
-            res += '|Atk: {0:1s}x {1:^4s}|\n'.format(n_attacks, damage_type)
-            res += '|+{0:<2s}→{1:>2s}d{2:<2s}+{3:<2s}|\n'.format(tohit, n_dice, die_size, damage_modifier)
-            res += '+============+'
-            # Example:
-            # '+============+'
-            # '|hp  123/ 200|'
-            # '|ac 13|Spd 30|'
-            # '|Saves: 12/16|'
-            # '+============+'
-            # '|Atk: 2x Piec|'
-            # '|+6 → 2d6 +3 |'
-            # '+============+'
-
-        return res
-
-class Ability:
-    """Base class for all abilities
-    """
-    def __init__(self, name):
-        self.name = name
-
-class Attack(Ability):
-    """Class to hold an attack ability
-    """
-    def __init__(self, name, tohit, n_dice, die_size, modifier, damage_type, n_attacks=1):
-        super().__init__(name)
-
-        self.tohit = tohit
-        self.n_dice = n_dice
-        self.die_size = die_size
-        self.modifier = modifier
-        self.damage_type = damage_type
-        self.n_attacks = n_attacks
-
-    def get_avg_damage(self):
-        return self.n_attacks * (self.n_dice * (self.die_size/2 + 0.5) + self.modifier)
+    #endregion
