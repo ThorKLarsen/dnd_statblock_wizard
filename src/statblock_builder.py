@@ -18,7 +18,7 @@ class StatblockBuilder():
         pass
 
     def make_statblock_basic(self, cr, stats: dict = None, offense_ratio: float = None, seed=None):
-        """Makes a Statblock object based losely on the DMG p.274 table. 
+        """Makes a Statblock object based losely on the DMG p.274 table.
 
 
         Args:
@@ -42,8 +42,11 @@ class StatblockBuilder():
             stats.setdefault(stat_name, None)
 
         off_cr, def_cr = self.split_cr(cr, offense_ratio)
-        hp, ac, strong_save, weak_save = self.get_defensive_stats(def_cr, hp=stats['hp'], ac=stats['ac'])
-        tohit, damage, save_dc = self.get_offensive_stats(off_cr, tohit=stats['tohit'], damage=stats['damage'], save_dc=stats['save_dc'])
+
+        hp, ac, strong_save, weak_save = self.get_defensive_stats(
+            def_cr, hp=stats['hp'], ac=stats['ac'])
+        tohit, damage, save_dc = self.get_offensive_stats(
+            off_cr, tohit=stats['tohit'], damage=stats['damage'], save_dc=stats['save_dc'])
 
         stats['cr'] = cr
         stats['hp_max'] = round(hp)
@@ -66,7 +69,15 @@ class StatblockBuilder():
 
         return statblock
 
-    def make_attack(self, name: str, damage_type: DamageType, tohit: int, damage_target: float, die_size = None, n_attacks=None):
+    def make_attack(
+            self,
+            name: str,
+            damage_type: DamageType,
+            tohit: int,
+            damage_target: float,
+            die_size = None,
+            n_attacks=None,
+        ):
         """Makes an Attack object based on the given arguments.
         Die size (e.i. d4, d6, etc.) and number of attacks can be fixed.
         The other attrubutes will be computed from 'damage_target'.
@@ -74,7 +85,7 @@ class StatblockBuilder():
 
         Args:
             name (string): Name of the attack 'Slam, Longsword, Firebolt, etc.
-            damage_type (enum): The damage type of the attack. Should be an instance of DamageTypes. 
+            damage_type (enum): The damage type of the attack. Should be an instance of DamageTypes.
             tohit (int): To hit bonus of the attack.
             damage_target (float): The damage of the attack assuming it hits.
             die_size (int, optional): The die size used, i.e. d4, d6, etc. Defaults to None.
@@ -87,7 +98,7 @@ class StatblockBuilder():
             die_size = random.choice((4,6,8,12))
             if damage_target > 50 and die_size == 4:
                 die_size = 8
-        
+
         assert die_size in [1,2,4,6,8,12,20]
         die_avg_damage = die_size//2 + 0.5
         if n_attacks is None:
@@ -151,18 +162,18 @@ class StatblockBuilder():
             cr (float): cr  of the monster
             hp (float, optional): hp of the monster. Defaults to None.
             ac (float, optional): ac of the monster. Defaults to None.
-            hp_to_ac_ratio (float, optional): Base ratio of the cr-budget that 
-                                            will be used on hp as opposed to ac. 
-                                            This is only used if no hp or ac are 
+            hp_to_ac_ratio (float, optional): Base ratio of the cr-budget that
+                                            will be used on hp as opposed to ac.
+                                            This is only used if no hp or ac are
                                             given Defaults to 0.5.
-            random_interval (float, optional): Determines how far the cr-budget is 
-                                            allowed to randomly deviate. At one the 
-                                            whole budget can randomly be used on 
+            random_interval (float, optional): Determines how far the cr-budget is
+                                            allowed to randomly deviate. At one the
+                                            whole budget can randomly be used on
                                             either ac or hp. At zero, there is
                                             no random deviating. Defaults to 0.
 
         Returns:
-            (hp, ac): hp and ac that correspands to the given cr. If either or both 
+            (hp, ac): hp and ac that correspands to the given cr. If either or both
             were given as arguments, they are passed back here.
         """
         if ac is None and hp is None:
@@ -173,7 +184,7 @@ class StatblockBuilder():
                 a, b = 0, 0
             hp_modifier = 2 * hp_to_ac_ratio     + a
             ac_modifier = 2 * (1-hp_to_ac_ratio) + b
-            
+
             hp = self.hp_from_cr(cr * hp_modifier)
             ac = self.ac_from_cr(cr * ac_modifier)
         elif hp is None:
@@ -186,7 +197,7 @@ class StatblockBuilder():
             cr_ac = 2*cr - cr_hp
 
             ac = self.ac_from_cr(cr_ac)
-        
+
         strong_save = self.strong_save_from_cr(cr)
 
         if cr <= 2:
@@ -195,7 +206,7 @@ class StatblockBuilder():
             weak_save = 2
         else:
             weak_save = 3
-        
+
         return hp, ac, strong_save, weak_save
 
     def offensive_cr(self, tohit, damage, strong_save=None, save_att_ratio=0.25):
@@ -203,11 +214,11 @@ class StatblockBuilder():
 
         Args:
             tohit (float): The monsters tohit stat (i.e. the bonus to attack rolls)
-            damage (float): The monsters average damage per round assuming the attack, 
+            damage (float): The monsters average damage per round assuming the attack,
                             spell or ability hits.
-            strong_save (float, optional): The monsters save dc for spells or abilities, 
+            strong_save (float, optional): The monsters save dc for spells or abilities,
                             if any. Defaults to None.
-            save_att_ratio (float, optional): The ratio of damage the monster is expected 
+            save_att_ratio (float, optional): The ratio of damage the monster is expected
                             to do from saving throws, and not attacks. Defaults to 0.25.
 
         Returns:
@@ -259,7 +270,7 @@ class StatblockBuilder():
             save_dc = self.save_dc_from_cr(cr * save_att_ratio)
 
         return tohit, damage, save_dc
-    
+
     #region cr_from_x
     def cr_from_pb(self, pb):
         """Challenge rating computed from proficiency bonus
@@ -298,6 +309,14 @@ class StatblockBuilder():
             return (ac-12.5) * 3
 
     def cr_from_tohit(self, tohit):
+        """Computes CR from tohit stat
+
+        Args:
+            tohit (float): tohit stat of the statblock
+
+        Returns:
+            cr: The CR corresponding to that tohit value
+        """
         if tohit >= 5:
             cr = (tohit-1)/2
         else:
@@ -305,6 +324,14 @@ class StatblockBuilder():
         return cr
 
     def cr_from_damage(self, damage):
+        """Computes CR from damage
+
+        Args:
+            damage (float): damage stat
+
+        Returns:
+            cr: CR corresponding to that damage value
+        """
         if damage >= 10:
             cr = (damage-1)/5
         else:
@@ -312,9 +339,25 @@ class StatblockBuilder():
         return cr
 
     def cr_from_strong_save(self, strong_save):
+        """Computes CR from strong save stat
+
+        Args:
+            strong_save (float): strong save stat
+
+        Returns:
+            cr: CR corresponding to that save stat
+        """
         return self.cr_from_tohit(strong_save-7)
-    
+
     def cr_from_save_dc(self, save_dc):
+        """Computes CR from save DC
+
+        Args:
+            save_DC (float): save DC (for spells, abilities etc.)
+
+        Returns:
+            cr: CR corresponding to that DC
+        """
         return self.cr_from_ac(save_dc+2)
     #endregion
 
@@ -361,21 +404,29 @@ class StatblockBuilder():
             return 13 + 0.35*cr
 
     def tohit_from_cr(self, cr):
+        """Computes tohit from cr
+        """
         if cr >= 1:
             return (cr + 7)/2
         else:
             return 0.75 * math.log(300*cr)
-    
+
     def damage_from_cr(self, cr):
+        """Computes damage from CR
+        """
         if cr >= 1:
             return (cr+1)*5
         else:
             return 3.125 * math.log(23.3 * cr)
-    
+
     def save_dc_from_cr(self, cr):
+        """Computes save DC from CR
+        """
         return self.tohit_from_cr(cr)+7
-    
+
     def strong_save_from_cr(self, cr):
+        """Computes strong saving throw from CR
+        """
         return self.ac_from_cr(cr) -11
     #endregion
 
@@ -386,7 +437,7 @@ class StatblockBuilder():
         elif hp > 50*cr:
             return 50*cr
         return hp
-    
+
     def _ac_bound(self, ac, cr):
         if ac < 0:
             return 0
@@ -420,11 +471,11 @@ class StatblockBuilder():
             del x[i]
 
         sol = optimize.minimize(
-            self._optimize_objective_function, 
+            self._optimize_objective_function,
             x,
             (fixed_index, fixed_value),
             bounds=self._optimize_bounds(fixed_index),
-            tol=0.0001  
+            tol=0.0001
         )
         # print(sol)
         sol = list(sol.x)
@@ -433,7 +484,7 @@ class StatblockBuilder():
 
         # sol entries:
         # ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_dc', 'strong_save', 'weak_save']
- 
+
         stats = {
             'cr':round(sol[0]),
             'hp_max':round(sol[1]),
@@ -448,7 +499,9 @@ class StatblockBuilder():
         }
 
         damage_type = DamageType.BLUDGEONING
-        attack = self.make_attack('Slam', damage_type, round(stats['tohit']), round(stats['damage']))
+        attack = self.make_attack(
+            'Slam', damage_type, round(stats['tohit']), round(stats['damage'])
+        )
         stats['actions'] = [attack]
         stats['basic_attack'] = attack
 
@@ -459,7 +512,7 @@ class StatblockBuilder():
         hp, ac, strong_save, weak_save = self.get_defensive_stats(cr)
         tohit, damage, save_dc = self.get_offensive_stats(cr)
         return [cr, hp, ac, tohit, damage, save_dc, strong_save, weak_save]
-    
+
     def _optimize_bounds(self, fixed_index):
         bounds = [
             (None, None), # cr
