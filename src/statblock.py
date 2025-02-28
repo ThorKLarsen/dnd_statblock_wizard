@@ -6,7 +6,7 @@ class Statblock():
         'ac',
         'hp_max',
         'hp_cur',
-        'Speed',
+        'speed',
         'Str',
         'Dex',
         'Con',
@@ -135,7 +135,7 @@ class Statblock():
             ac = self.attributes.get('ac', 10)
             ac = self.format_number(ac, 2)
 
-            speed = self.attributes.get('Speed', 0)
+            speed = self.attributes.get('speed', 0)
             speed = self.format_number(speed, 2)
 
             strong_save = self.attributes.get('strong_save', 10)
@@ -150,7 +150,7 @@ class Statblock():
             n_dice = self.format_number(ba.n_dice, 2)
             die_size = self.format_number(ba.die_size, 2)
             damage_modifier = self.format_number(ba.modifier, 2)
-
+            
             damage_type = ba.damage_type.abbr
 
             res += '+============+\n'

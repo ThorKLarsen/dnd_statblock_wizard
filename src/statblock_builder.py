@@ -17,14 +17,18 @@ class StatblockBuilder():
     def __init__(self, seed = None):
         pass
 
-    def make_statblock_basic(self, cr, stats=None, offense_ratio=None, seed=None):
+    def make_statblock_basic(self, cr, stats: dict = None, offense_ratio: float = None, seed=None):
         """Makes a Statblock object based losely on the DMG p.274 table. 
 
 
         Args:
-            cr (Int): Challenge rating of the monster, this is required.
-            kwargs  : Optional conditions for the monster. The other stats
-                        will be adjusted to fit the cr.
+            cr (Int):               Challenge rating of the monster, this is required.
+            stats (dict)  :         Optional conditions for the monster. The other stats
+                                    will be adjusted to fit the cr.
+            offence_ratio (float):  A number [0, 1] describing how much of the cr
+                                    "budget" should be used of offensive stats as opposed
+                                    to defensive stats.
+            seed (int):             Seed for random generation.
 
         Returns:
             Statblock: A Statblock object of the created monster.
@@ -51,7 +55,7 @@ class StatblockBuilder():
         stats['strong_save'] = round(strong_save)
         stats['weak_save'] = round(weak_save)
 
-        stats['Speed'] = 30
+        stats['speed'] = 30
 
         damage_type = DamageType.BLUDGEONING
         attack = self.make_attack('Slam', damage_type, round(tohit), round(damage))
@@ -62,7 +66,7 @@ class StatblockBuilder():
 
         return statblock
 
-    def make_attack(self, name, damage_type, tohit, damage_target, die_size = None, n_attacks=None):
+    def make_attack(self, name: str, damage_type: DamageType, tohit: int, damage_target: float, die_size = None, n_attacks=None):
         """Makes an Attack object based on the given arguments.
         Die size (e.i. d4, d6, etc.) and number of attacks can be fixed.
         The other attrubutes will be computed from 'damage_target'.
@@ -238,26 +242,21 @@ class StatblockBuilder():
             (tohit, damage, save_dc): Tuple of offensive stats
         """
         if tohit is None and damage is None:
-            a = random.random()
-            b = 1-a
-            tohit_ratio = 1 + (0.5-a)*0.8
-            damage_ratio = 1 + (0.5-b)*0.8
+            tohit = self.tohit_from_cr(cr)
+            damage = self.damage_from_cr(cr)
 
-            tohit = self.tohit_from_cr(cr * tohit_ratio)
-            damage = self.damage_from_cr(cr * damage_ratio)
         elif tohit is None:
             cr_tohit = self.cr_from_tohit(tohit)
             cr_damage = 2*cr - cr_tohit
-
             damage = self.damage_from_cr(cr_damage)
+
         elif damage is None:
             cr_damage = self.cr_from_damage(cr_damage)
             cr_tohit = 2*cr - cr_damage
-
             tohit = self.tohit_from_cr(cr_tohit)
 
         if save_dc is None:
-            save_dc = self.save_dc_from_cr(cr * tohit_ratio * save_att_ratio)
+            save_dc = self.save_dc_from_cr(cr * save_att_ratio)
 
         return tohit, damage, save_dc
     
@@ -400,6 +399,8 @@ class StatblockBuilder():
 
     #region optimize
     def make_statblock_optimize(self, cr, stats=None, offense_ratio=None, seed=None):
+
+
         # ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_dc', 'strong_save', 'weak_save']
         random.seed(seed)
         fixed_index = []
@@ -430,7 +431,29 @@ class StatblockBuilder():
         for i, v in zip(fixed_index, fixed_value):
             sol.insert(i, v)
 
-        return sol
+        # sol entries:
+        # ['cr', 'hp', 'ac', 'tohit', 'damage', 'save_dc', 'strong_save', 'weak_save']
+ 
+        stats = {
+            'cr':round(sol[0]),
+            'hp_max':round(sol[1]),
+            'hp_cur':round(sol[1]),
+            'ac':round(sol[2]),
+            'tohit':round(sol[3]),
+            'damage':sol[4],
+            'save_dc':round(sol[5]),
+            'strong_save':round(sol[6]),
+            'weak_save':round(sol[7]),
+            'speed': 30,
+        }
+
+        damage_type = DamageType.BLUDGEONING
+        attack = self.make_attack('Slam', damage_type, round(stats['tohit']), round(stats['damage']))
+        stats['actions'] = [attack]
+        stats['basic_attack'] = attack
+
+        sb = Statblock(stats)
+        return sb
 
     def _optimize_guess(self, cr):
         hp, ac, strong_save, weak_save = self.get_defensive_stats(cr)
