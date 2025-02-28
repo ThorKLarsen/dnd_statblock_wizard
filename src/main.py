@@ -4,7 +4,7 @@ from statblock_builder import StatblockBuilder
 SBB = StatblockBuilder()
 
 # Create a basic statblock with cr 5
-sb = SBB.make_statblock_basic(5)
+sb = SBB.make_statblock_basic(5, {'hp': 20})
 
 print(sb.format())
 
